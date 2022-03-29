@@ -55,7 +55,6 @@ exports.callUserNotify = functions.database.ref("/call/{call_id}")
           call_type: `${callType}`,
           caller_id: `${context.auth.uid}`,
           caller_name:`${callerName}`,
-          click_action: 'NOTIFICATION_CLICK',
         }
       };
       const iosPayload = {
@@ -120,4 +119,26 @@ exports.callUserNotify = functions.database.ref("/call/{call_id}")
       // });
 
       // return Promise.all(tokensToRemove);
+    });
+
+exports.onCallUpdate = functions.database.ref("/call/{call_id}")
+    .onUpdate(async (change, context) => {
+        // Only edit data when it is first created.
+      if (!change.before.exists()) {
+        return null;
+      }
+      // Exit when the data is deleted.
+      if (!change.after.exists()) {
+        return null;
+      }
+       // Grab the current value of what was written to the Realtime Database.
+      const after = change.after.val();
+      const before = change.before.val();
+
+      functions.logger.log("before,", before);
+      functions.logger.log("after,", after);
+
+      if(after['call_status'] >= 3){
+        return change.after.ref.remove()
+      }
     });
