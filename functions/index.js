@@ -3,6 +3,10 @@ const admin = require("firebase-admin");
 const { _objectWithOptions } = require("firebase-functions/v1/storage");
 admin.initializeApp();
 
+const { generateToken04 } = require("./token04/server/zegoServerAssistant");
+const appID = {your_app_id};
+const secret = "{your_server_secret}";
+
 // // Create and Deploy Your First Cloud Functions
 // // https://firebase.google.com/docs/functions/write-firebase-functions
 //
@@ -142,3 +146,22 @@ exports.onCallUpdate = functions.database.ref("/call/{call_id}")
         return change.after.ref.remove()
       }
     });
+
+exports.getToken = functions.https.onCall((data, context) => {
+    if (!(context.auth && context.auth.uid)) {
+        throw new functions.https.HttpsError('permission-denied', 'Must be signed in!');
+    }
+    const userID = data.id;
+    const effectiveTimeInSeconds = data.effective_time;
+    if (effectiveTimeInSeconds <= 0) {
+        throw new functions.https.HttpsError('parameter-invalid', 'Effective time must be greater then zero!');
+    }
+    const payload = '';
+
+    // Build token 
+    const token =  generateToken04(appID, userID, secret, effectiveTimeInSeconds, payload);
+
+    return {
+        token: token
+    };
+});
