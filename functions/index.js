@@ -19,6 +19,9 @@ exports.callUserNotify = functions.database.ref("/call/{call_id}")
     .onCreate(async (snapshot, context) => {
       // Grab the current value of what was written to the Realtime Database.
       const callData = snapshot.val();
+      if(callData.call_id == null){
+        return snapshot.ref.remove()
+      }
       // functions.logger.log("call user11,", context.params.call_id, original);
 
       functions.logger.log("call user11,", callData.users);
@@ -59,6 +62,7 @@ exports.callUserNotify = functions.database.ref("/call/{call_id}")
           call_type: `${callType}`,
           caller_id: `${context.auth.uid}`,
           caller_name:`${callerName}`,
+          call_data: `${callData}`,
         }
       };
       const iosPayload = {
@@ -85,23 +89,21 @@ exports.callUserNotify = functions.database.ref("/call/{call_id}")
       }).map(function(x){ 
         return x['token_id']
       });
-      functions.logger.log("androidTarget,", androidTarget);
-      functions.logger.log("iosTarget,", iosTarget);
 
       let promise = [];
       let androidPush;
       if(androidTarget.length > 0){
+        functions.logger.log("androidTarget,", androidTarget);
         androidPush = admin.messaging().sendToDevice(androidTarget, androidPayload);
         promise.push(androidPush);
       }
       let iosPush;
       if(iosTarget.length > 0){
+        functions.logger.log("iosTarget,", iosTarget);
         iosPush = admin.messaging().sendToDevice(iosTarget, iosPayload);
         promise.push(iosPush);
       }
       
-      // const target = tokensValue.map(function(x){ return x['token_id']})
-      // functions.logger.log("call77,", target);
       const response = await Promise.all(promise);
 
       // For each message check if there was an error.
@@ -123,6 +125,24 @@ exports.callUserNotify = functions.database.ref("/call/{call_id}")
       // });
 
       // return Promise.all(tokensToRemove);
+      
+      setTimeout(function(){
+        snapshot.ref.once("value").then(function(snapshot2) {
+          var currentData = snapshot2.val();
+          if(currentData == null){
+            return;
+          }
+          functions.logger.log("callUserTimeout,",currentData);
+          if(currentData.call_status == 1){
+            currentData.call_status = 3;
+            for (const key in currentData.users ) {
+              currentData.users[key].status = 7;
+            }
+            snapshot.ref.update(currentData);
+          }
+        });
+        
+      },60000)
     });
 
 exports.onCallUpdate = functions.database.ref("/call/{call_id}")
@@ -142,7 +162,7 @@ exports.onCallUpdate = functions.database.ref("/call/{call_id}")
       functions.logger.log("before,", before);
       functions.logger.log("after,", after);
 
-      if(after['call_status'] >= 3){
+      if(after['call_status'] >= 3 ){
         return change.after.ref.remove()
       }
     });
