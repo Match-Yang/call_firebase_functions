@@ -173,6 +173,7 @@ exports.getToken = functions.https.onCall((data, context) => {
     }
     const userID = data.id;
     const effectiveTimeInSeconds = data.effective_time;
+    functions.logger.log("[Get Token] userID: ", userID, ", effectiveTimeInSeconds: ", effectiveTimeInSeconds);
     if (effectiveTimeInSeconds <= 0) {
         throw new functions.https.HttpsError('parameter-invalid', 'Effective time must be greater then zero!');
     }
@@ -180,6 +181,7 @@ exports.getToken = functions.https.onCall((data, context) => {
 
     // Build token 
     const token =  generateToken04(appID, userID, secret, effectiveTimeInSeconds, payload);
+    functions.logger.log("[Get Token] token: ", token);
 
     return {
         token: token
