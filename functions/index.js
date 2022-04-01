@@ -4,8 +4,8 @@ const { _objectWithOptions } = require("firebase-functions/v1/storage");
 admin.initializeApp();
 
 const { generateToken04 } = require("./token04/server/zegoServerAssistant");
-const appID = {your_app_id};
-const secret = "{your_server_secret}";
+const appID = "3630571287";
+const secret = "8db21d37dedfbc127a3c74c1a9b0b9df";
 
 // // Create and Deploy Your First Cloud Functions
 // // https://firebase.google.com/docs/functions/write-firebase-functions
@@ -15,16 +15,17 @@ const secret = "{your_server_secret}";
 //   response.send("Hello from Firebase!");
 // });
 
-exports.callUserNotify = functions.database.ref("/call/{call_id}")
+exports.onCallCreate = functions.database.ref("/call/{call_id}")
     .onCreate(async (snapshot, context) => {
       // Grab the current value of what was written to the Realtime Database.
       const callData = snapshot.val();
       if(callData.call_id == null){
+        functions.logger.log("onCreate ,call_id == null");
         return snapshot.ref.remove()
       }
       // functions.logger.log("call user11,", context.params.call_id, original);
 
-      functions.logger.log("call user11,", callData.users);
+      functions.logger.log("onCreate user11,", callData.users);
       const result = await admin.auth().getUser(context.auth.uid);
       const callerName = result.displayName;
 
@@ -46,7 +47,7 @@ exports.callUserNotify = functions.database.ref("/call/{call_id}")
           tokensValue.push(...tokens);
         }
       });
-      functions.logger.log("call66,", tokensValue);
+      functions.logger.log("onCreate 66,", tokensValue);
       if(tokensValue.length == 0){
         return;
       }
@@ -56,13 +57,11 @@ exports.callUserNotify = functions.database.ref("/call/{call_id}")
 
       const androidPayload = {
         data:{
-          title: 'You have a new call!',
-          body: `${callerName} is now calling you.`,
           call_id: `${callID}`,
           call_type: `${callType}`,
           caller_id: `${context.auth.uid}`,
           caller_name:`${callerName}`,
-          call_data: `${callData}`,
+          call_data: `${JSON.stringify(snapshot.toJSON())}`,
         }
       };
       const iosPayload = {
@@ -93,13 +92,13 @@ exports.callUserNotify = functions.database.ref("/call/{call_id}")
       let promise = [];
       let androidPush;
       if(androidTarget.length > 0){
-        functions.logger.log("androidTarget,", androidTarget);
+        functions.logger.log("onCreate androidTarget,", androidTarget);
         androidPush = admin.messaging().sendToDevice(androidTarget, androidPayload);
         promise.push(androidPush);
       }
       let iosPush;
       if(iosTarget.length > 0){
-        functions.logger.log("iosTarget,", iosTarget);
+        functions.logger.log("onCreate iosTarget,", iosTarget);
         iosPush = admin.messaging().sendToDevice(iosTarget, iosPayload);
         promise.push(iosPush);
       }
@@ -132,7 +131,6 @@ exports.callUserNotify = functions.database.ref("/call/{call_id}")
           if(currentData == null){
             return;
           }
-          functions.logger.log("callUserTimeout,",currentData);
           if(currentData.call_status == 1){
             currentData.call_status = 3;
             for (const key in currentData.users ) {
@@ -159,12 +157,19 @@ exports.onCallUpdate = functions.database.ref("/call/{call_id}")
       const after = change.after.val();
       const before = change.before.val();
 
-      functions.logger.log("before,", before);
-      functions.logger.log("after,", after);
-
       if(after['call_status'] >= 3 ){
         return change.after.ref.remove()
       }
+      // if(before['call_status'] == 1 && after['call_status'] == 2){
+        // setTimeout(function(){
+          
+          
+        // },30000)
+        // var Timer = setInterval(function () {
+        //   change.after.ref.once("value", function (snapshot) {
+        //   })
+        // },30000);
+      // }
     });
 
 exports.getToken = functions.https.onCall((data, context) => {
@@ -173,7 +178,7 @@ exports.getToken = functions.https.onCall((data, context) => {
     }
     const userID = data.id;
     const effectiveTimeInSeconds = data.effective_time;
-    functions.logger.log("[Get Token] userID: ", userID, ", effectiveTimeInSeconds: ", effectiveTimeInSeconds);
+    functions.logger.log("[Get Token] userID: ", userID, ", effectiveTimeInSeconds: ", effectiveTimeInSeconds);    
     if (effectiveTimeInSeconds <= 0) {
         throw new functions.https.HttpsError('parameter-invalid', 'Effective time must be greater then zero!');
     }
@@ -182,8 +187,43 @@ exports.getToken = functions.https.onCall((data, context) => {
     // Build token 
     const token =  generateToken04(appID, userID, secret, effectiveTimeInSeconds, payload);
     functions.logger.log("[Get Token] token: ", token);
-
-    return {
+        return {
         token: token
     };
+});
+
+exports.scheduledFunction = functions.pubsub.schedule('every 10 minutes').onRun(async(context) => {
+    const callRef = admin.database().ref("/call");
+    const result = await admin.database().ref("/call").once("value");
+    const current = new Date().getTime();
+    if(result == null || result.val() == null){
+      return ;
+    }
+    const values = Object.values(result.val())
+    var removedKeys = []
+    for(const calldata of values){
+      if(calldata.call_status == 2){
+        var toBeCleared = false ;
+        const users = Object.values(calldata.users);
+        for(const user of users){
+          const timeElapsed = current-user.heartbeat_time;
+          if(timeElapsed > 180000){
+            toBeCleared = true;
+            break;
+          }
+        }
+        if(toBeCleared){
+          removedKeys.push(calldata.call_id)
+        }
+      }
+    }
+    var removedCalls = [];
+    removedKeys.forEach(function(key){
+      removedCalls.push(admin.database().ref("/call").child(key).remove())
+    })
+    functions.logger.log("scheduledFunction,removed:" ,removedKeys);
+    if(removedCalls.length > 0){
+      return await Promise.all(removedCalls);
+    }
+    
 });
