@@ -67,7 +67,7 @@ exports.onCallCreate = functions.database.ref("/call/{call_id}")
       const iosPayload = {
         notification: {
           title: 'You have a new call!',
-          body: `${callerName} is now calling you.`
+          body: `${callerName} is calling you.`
         },
         data:{
           call_id: `${callID}`,
