@@ -7,6 +7,7 @@ const { generateToken04 } = require("./token04/server/zegoServerAssistant");
 const appID = {your_app_id};
 const secret = "{your_server_secret}";
 
+
 // // Create and Deploy Your First Cloud Functions
 // // https://firebase.google.com/docs/functions/write-firebase-functions
 //
@@ -74,6 +75,7 @@ exports.onCallCreate = functions.database.ref("/call/{call_id}")
           call_type: `${callType}`,
           caller_id: `${context.auth.uid}`,
           caller_name:`${callerName}`,
+          call_data: `${JSON.stringify(snapshot.toJSON())}`,
           'click_action': 'NOTIFICATION_CLICK',
         }
       };
@@ -192,7 +194,7 @@ exports.getToken = functions.https.onCall((data, context) => {
     };
 });
 
-exports.scheduledFunction = functions.pubsub.schedule('every 10 minutes').onRun(async(context) => {
+exports.scheduledFunction = functions.pubsub.schedule('every 3 minutes').onRun(async(context) => {
     const callRef = admin.database().ref("/call");
     const result = await admin.database().ref("/call").once("value");
     const current = new Date().getTime();
@@ -202,19 +204,31 @@ exports.scheduledFunction = functions.pubsub.schedule('every 10 minutes').onRun(
     const values = Object.values(result.val())
     var removedKeys = []
     for(const calldata of values){
+      functions.logger.log("calldata: ", calldata);
+      var toBeCleared = false ;
       if(calldata.call_status == 2){
-        var toBeCleared = false ;
         const users = Object.values(calldata.users);
         for(const user of users){
           const timeElapsed = current-user.heartbeat_time;
+          functions.logger.log("timeElapsed11: ", timeElapsed);
           if(timeElapsed > 180000){
             toBeCleared = true;
             break;
           }
         }
-        if(toBeCleared){
-          removedKeys.push(calldata.call_id)
+      }else if(calldata.call_status = 1){
+        const users = Object.values(calldata.users);
+        for(const user of users){
+          const timeElapsed = current-user.start_time;
+          functions.logger.log("timeElapsed22: ", timeElapsed);
+          if(timeElapsed > 180000){
+            toBeCleared = true;
+            break;
+          }
         }
+      }
+      if(toBeCleared){
+        removedKeys.push(calldata.call_id)
       }
     }
     var removedCalls = [];
