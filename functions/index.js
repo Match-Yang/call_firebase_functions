@@ -7,6 +7,7 @@ const { generateToken04 } = require("./token04/server/zegoServerAssistant");
 const appID = {your_app_id};
 const secret = "{your_server_secret}";
 
+
 // // Create and Deploy Your First Cloud Functions
 // // https://firebase.google.com/docs/functions/write-firebase-functions
 //
@@ -20,12 +21,11 @@ exports.onCallCreate = functions.database.ref("/call/{call_id}")
       // Grab the current value of what was written to the Realtime Database.
       const callData = snapshot.val();
       if(callData.call_id == null){
-        functions.logger.log("onCreate ,call_id == null");
         return snapshot.ref.remove()
       }
       // functions.logger.log("call user11,", context.params.call_id, original);
 
-      functions.logger.log("onCreate user11,", callData.users);
+      functions.logger.log("onCreate user,", callData.users);
       const result = await admin.auth().getUser(context.auth.uid);
       const callerName = result.displayName;
 
@@ -47,7 +47,6 @@ exports.onCallCreate = functions.database.ref("/call/{call_id}")
           tokensValue.push(...tokens);
         }
       });
-      functions.logger.log("onCreate 66,", tokensValue);
       if(tokensValue.length == 0){
         return;
       }
@@ -74,6 +73,7 @@ exports.onCallCreate = functions.database.ref("/call/{call_id}")
           call_type: `${callType}`,
           caller_id: `${context.auth.uid}`,
           caller_name:`${callerName}`,
+           call_data: `${JSON.stringify(snapshot.toJSON())}`,
           'click_action': 'NOTIFICATION_CLICK',
         }
       };
@@ -202,8 +202,8 @@ exports.scheduledFunction = functions.pubsub.schedule('every 10 minutes').onRun(
     const values = Object.values(result.val())
     var removedKeys = []
     for(const calldata of values){
+      var toBeCleared = false ;
       if(calldata.call_status == 2){
-        var toBeCleared = false ;
         const users = Object.values(calldata.users);
         for(const user of users){
           const timeElapsed = current-user.heartbeat_time;
@@ -212,9 +212,18 @@ exports.scheduledFunction = functions.pubsub.schedule('every 10 minutes').onRun(
             break;
           }
         }
-        if(toBeCleared){
-          removedKeys.push(calldata.call_id)
+      }else if(calldata.call_status = 1){
+        const users = Object.values(calldata.users);
+        for(const user of users){
+          const timeElapsed = current-user.start_time;
+          if(timeElapsed > 180000){
+            toBeCleared = true;
+            break;
+          }
         }
+      }
+      if(toBeCleared){
+        removedKeys.push(calldata.call_id)
       }
     }
     var removedCalls = [];
