@@ -21,12 +21,11 @@ exports.onCallCreate = functions.database.ref("/call/{call_id}")
       // Grab the current value of what was written to the Realtime Database.
       const callData = snapshot.val();
       if(callData.call_id == null){
-        functions.logger.log("onCreate ,call_id == null");
         return snapshot.ref.remove()
       }
       // functions.logger.log("call user11,", context.params.call_id, original);
 
-      functions.logger.log("onCreate user11,", callData.users);
+      functions.logger.log("onCreate user,", callData.users);
       const result = await admin.auth().getUser(context.auth.uid);
       const callerName = result.displayName;
 
@@ -48,7 +47,6 @@ exports.onCallCreate = functions.database.ref("/call/{call_id}")
           tokensValue.push(...tokens);
         }
       });
-      functions.logger.log("onCreate 66,", tokensValue);
       if(tokensValue.length == 0){
         return;
       }
@@ -75,7 +73,7 @@ exports.onCallCreate = functions.database.ref("/call/{call_id}")
           call_type: `${callType}`,
           caller_id: `${context.auth.uid}`,
           caller_name:`${callerName}`,
-          call_data: `${JSON.stringify(snapshot.toJSON())}`,
+           call_data: `${JSON.stringify(snapshot.toJSON())}`,
           'click_action': 'NOTIFICATION_CLICK',
         }
       };
@@ -194,7 +192,7 @@ exports.getToken = functions.https.onCall((data, context) => {
     };
 });
 
-exports.scheduledFunction = functions.pubsub.schedule('every 3 minutes').onRun(async(context) => {
+exports.scheduledFunction = functions.pubsub.schedule('every 10 minutes').onRun(async(context) => {
     const callRef = admin.database().ref("/call");
     const result = await admin.database().ref("/call").once("value");
     const current = new Date().getTime();
@@ -204,13 +202,11 @@ exports.scheduledFunction = functions.pubsub.schedule('every 3 minutes').onRun(a
     const values = Object.values(result.val())
     var removedKeys = []
     for(const calldata of values){
-      functions.logger.log("calldata: ", calldata);
       var toBeCleared = false ;
       if(calldata.call_status == 2){
         const users = Object.values(calldata.users);
         for(const user of users){
           const timeElapsed = current-user.heartbeat_time;
-          functions.logger.log("timeElapsed11: ", timeElapsed);
           if(timeElapsed > 180000){
             toBeCleared = true;
             break;
@@ -220,7 +216,6 @@ exports.scheduledFunction = functions.pubsub.schedule('every 3 minutes').onRun(a
         const users = Object.values(calldata.users);
         for(const user of users){
           const timeElapsed = current-user.start_time;
-          functions.logger.log("timeElapsed22: ", timeElapsed);
           if(timeElapsed > 180000){
             toBeCleared = true;
             break;
